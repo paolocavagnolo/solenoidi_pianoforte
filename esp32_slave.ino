@@ -15,17 +15,17 @@
   #define NUM_SOLENOIDS 15
   #define FIRST_NOTE 21
   #define LAST_NOTE  35
-  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 16, 17, 21, 22, 25, 26, 27, 32, 33, 18, 19, 23 };
+  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 23, 5, 21, 22, 25, 26, 27, 32, 33, 18, 19, 23 };
 #elif (BOARD_INDEX == 6)
   #define NUM_SOLENOIDS 13
   #define FIRST_NOTE 96
   #define LAST_NOTE  108
-  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 16, 17, 21, 22, 25, 26, 27, 32, 33, 18 };
+  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 23, 5, 21, 22, 25, 26, 27, 32, 33, 18 };
 #else
   #define NUM_SOLENOIDS 12
   #define FIRST_NOTE (36 + (BOARD_INDEX - 1) * 12)
   #define LAST_NOTE  (FIRST_NOTE + 11)
-  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 16, 17, 21, 22, 25, 26, 27, 32, 33 };
+  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 23, 5, 21, 22, 25, 26, 27, 32, 33 };
 #endif
 
 enum SolenoidState { STATE_IDLE, STATE_STRIKE, STATE_HOLD };
@@ -72,8 +72,8 @@ void processSerialBus() {
   static uint8_t note = 0;
   static uint8_t state = 0; // 0: attesa status, 1: attesa note, 2: attesa vel
 
-  while (Serial.available()) {
-    uint8_t b = Serial.read();
+  while (Serial2.available()) {
+    uint8_t b = Serial2.read();
 
     if (b & 0x80) { // Byte di stato MIDI (bit 7 = 1)
       status = b;
@@ -102,7 +102,7 @@ void processSerialBus() {
 }
 
 void setup() {
-  Serial.begin(BUS_BAUD);
+  Serial2.begin(BUS_BAUD);
 
   for (int i = 0; i < NUM_SOLENOIDS; i++) {
     solenoids[i].pin = pins[i];
