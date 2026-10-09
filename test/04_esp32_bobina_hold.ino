@@ -9,16 +9,13 @@
 #define HOLD_DUTY 64
 
 void setup() {
-
-  ledcSetup(0, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(PIN_SOLENOIDE, 0);
+  ledcAttach(PIN_SOLENOIDE, PWM_FREQ, PWM_RESOLUTION);
 
   ledcWrite(PIN_SOLENOIDE, 0);
   delay(1000);
 }
 
 void loop() {
-
   noteOn(20);
   delay(1000);
 
@@ -38,7 +35,8 @@ void noteOn(uint8_t velocity) {
     return;
   }
 
-  uint32_t strike_ms = map(velocity, 1, 127, MIN_STRIKE_MS, MAX_STRIKE_MS);
+  uint32_t strike_ms =
+      map(velocity, 1, 127, MIN_STRIKE_MS, MAX_STRIKE_MS);
 
   ledcWrite(PIN_SOLENOIDE, 255);
   delay(strike_ms);
