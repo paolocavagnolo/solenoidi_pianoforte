@@ -1,25 +1,35 @@
 // =========================================================================
-// IMPOSTA QUI L'INDICE DELLA SCHEDA: 0 = Bassa, 1..5 = Centrali, 6 = Alta
+// IMPOSTA QUI L'INDICE DELLA SCHEDA: 
+// 0 = Bassa (15 note), 1..5 = Centrali (12 note), 6 = Alta (13 note)
 // =========================================================================
 #define BOARD_INDEX 1 
 
-#define BUS_BAUD 11520
+#define BUS_BAUD 115200
 #define PWM_FREQ 20000
 #define PWM_RESOLUTION 8
 #define MIN_STRIKE_MS 10UL
 #define MAX_STRIKE_MS 45UL
 #define HOLD_DUTY 60
 
-// Configurazione automatica in base a BOARD_INDEX
+#ifndef LED_BUILTIN
+  #define PIN_LED 2 // Tipico LED blu/rosso montato sulle board ESP32 WROOM
+#else
+  #define PIN_LED LED_BUILTIN
+#endif
+
+// Assegnazione pin aggiornata: 23 al posto di 16, 5 al posto di 17
+// Pin 16 è riservato esclusivamente a Serial2 RX
 #if (BOARD_INDEX == 0)
   #define NUM_SOLENOIDS 15
   #define FIRST_NOTE 21
   #define LAST_NOTE  35
-  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 23, 5, 21, 22, 25, 26, 27, 32, 33, 18, 19, 23 };
+  // 12 pin base + 3 pin extra (18, 19 e 17 come GPIO libero)
+  const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 23, 5, 21, 22, 25, 26, 27, 32, 33, 18, 19, 17 };
 #elif (BOARD_INDEX == 6)
   #define NUM_SOLENOIDS 13
   #define FIRST_NOTE 96
   #define LAST_NOTE  108
+  // 12 pin base + 1 pin extra (18)
   const uint8_t pins[NUM_SOLENOIDS] = { 4, 13, 14, 23, 5, 21, 22, 25, 26, 27, 32, 33, 18 };
 #else
   #define NUM_SOLENOIDS 12
@@ -38,6 +48,21 @@ struct Solenoid {
 };
 
 Solenoid solenoids[NUM_SOLENOIDS];
+
+// Gestione non bloccante lampeggio LED
+unsigned long ledOffTime = 0;
+
+void triggerLed() {
+  digitalWrite(PIN_LED, HIGH);
+  ledOffTime = millis() + 30; // Rimane acceso 30 ms
+}
+
+void updateLed() {
+  if (ledOffTime != 0 && millis() >= ledOffTime) {
+    digitalWrite(PIN_LED, LOW);
+    ledOffTime = 0;
+  }
+}
 
 void noteOn(uint8_t idx, uint8_t velocity) {
   if (idx >= NUM_SOLENOIDS) return;
@@ -66,16 +91,16 @@ void updateSolenoids() {
   }
 }
 
-// Parser MIDI seriale a macchina a stati non bloccante
+// Ricezione da bus seriale su Serial2
 void processSerialBus() {
   static uint8_t status = 0;
   static uint8_t note = 0;
-  static uint8_t state = 0; // 0: attesa status, 1: attesa note, 2: attesa vel
+  static uint8_t state = 0;
 
   while (Serial2.available()) {
     uint8_t b = Serial2.read();
 
-    if (b & 0x80) { // Byte di stato MIDI (bit 7 = 1)
+    if (b & 0x80) {
       status = b;
       state = 1;
       continue;
@@ -86,10 +111,12 @@ void processSerialBus() {
       state = 2;
     } else if (state == 2) {
       uint8_t velocity = b;
-      state = 1; // Pronto per eventuale "running status"
+      state = 1;
 
-      // Controlla se la nota appartiene a questa scheda
+      // Filtro per questa scheda
       if (note >= FIRST_NOTE && note <= LAST_NOTE) {
+        triggerLed(); // ACCENDE IL LED SOLO SE IL PACCHETTO È PER QUESTA BOARD
+
         uint8_t localIdx = note - FIRST_NOTE;
         if (status == 0x90 && velocity > 0) {
           noteOn(localIdx, velocity);
@@ -102,6 +129,10 @@ void processSerialBus() {
 }
 
 void setup() {
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, LOW);
+
+  // Inizializza Serial2 (usa di default GPIO 16 come RX)
   Serial2.begin(BUS_BAUD);
 
   for (int i = 0; i < NUM_SOLENOIDS; i++) {
@@ -115,4 +146,5 @@ void setup() {
 void loop() {
   processSerialBus();
   updateSolenoids();
+  updateLed();
 }
