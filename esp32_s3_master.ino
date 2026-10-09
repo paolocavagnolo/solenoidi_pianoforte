@@ -9,23 +9,42 @@ Tools -> USB CDC On Boot: Enabled
 
 USBMIDI MIDI;
 
-// Baud rate per il bus seriale tra Master e Slave
-#define BUS_BAUD 115200 
+#define BUS_BAUD 115200
 
-// Invio pacchetto MIDI raw a 3 byte sul bus
+#ifndef LED_BUILTIN
+  #define PIN_LED 2 // Pin LED predefinito
+#else
+  #define PIN_LED LED_BUILTIN
+#endif
+
+// Gestione non bloccante del lampeggio LED
+unsigned long ledOffTime = 0;
+
+void triggerLed() {
+  digitalWrite(PIN_LED, HIGH);
+  ledOffTime = millis() + 30; // Rimane acceso 30 ms (ben visibile)
+}
+
+void updateLed() {
+  if (ledOffTime != 0 && millis() >= ledOffTime) {
+    digitalWrite(PIN_LED, LOW);
+    ledOffTime = 0;
+  }
+}
+
+// Invia il pacchetto MIDI raw a 3 byte sul bus
 void sendBusMidi(uint8_t status, uint8_t note, uint8_t velocity) {
   uint8_t packet[3] = { status, note, velocity };
   Serial0.write(packet, 3);
+  triggerLed(); // Feedback visivo sul Master
 }
 
 void onNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
-  // Filtra note esterne alla tastiera 88 tasti
   if (note < 21 || note > 108) return;
 
   if (velocity > 0) {
     sendBusMidi(0x90, note, velocity);
   } else {
-    // Velocity 0 è interpretato come NoteOff
     sendBusMidi(0x80, note, 0);
   }
 }
@@ -36,10 +55,13 @@ void onNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
 }
 
 void setup() {
-  // Serial0 usa i pin fisici TX (GPIO 43) e RX (GPIO 44)
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, LOW);
+
+  // Serial0 usa i pin fisici TX (GPIO 43) ed RX (GPIO 44)
   Serial0.begin(BUS_BAUD);
 
-  // Configura USB MIDI nativo
+  // Avvio USB-MIDI nativo
   MIDI.setNoteOnCallback(onNoteOn);
   MIDI.setNoteOffCallback(onNoteOff);
   MIDI.begin();
@@ -47,4 +69,5 @@ void setup() {
 }
 
 void loop() {
+  updateLed();
 }
